@@ -8,26 +8,30 @@ from lemon import api
 from lemon.market_data.model.quote import Quote
 
 
-# Configuration
-config = configparser.ConfigParser(allow_no_value=True, inline_comment_prefixes=('#',))
+# Load configuration from config file config.ini
+# Allow keys without values, allow inline comments:
+config = configparser.ConfigParser(
+    allow_no_value=True, inline_comment_prefixes=('#',))
 config.optionxform = str  # keep the case of the keys, don't convert to lowercase
 config.read('config.ini')  # read the config file
 api_key = config.get('API', 'key', fallback=None)  # get the api key
 isins = config.items('ISINS')  # get all items from section 'ISINS'
 instruments = [isin[0] for isin in isins]  # get only the isins keys
 
-## Quotes
+# Quotes
 quotes = {}
 updates = 0
 spinner = "-\\|/"
 
 
-def get_credentials(api_key : str):
+def get_credentials(api_key: str):
     print("Fetching credentials for live streaming...")
     # Lemon Markets API Client
-    lemon_markets_client = api.create(market_data_api_token=api_key, trading_api_token="trading-api-is-not-used", env='paper')
+    lemon_markets_client = api.create(
+        market_data_api_token=api_key, trading_api_token="trading-api-is-not-used", env='paper')
     try:
-        response = lemon_markets_client.market_data.post("https://realtime.lemon.markets/v1/auth", json={})
+        response = lemon_markets_client.market_data.post(
+            "https://realtime.lemon.markets/v1/auth", json={})
         response = response.json()
         user_id = response['user_id']
         token = response['token']
@@ -42,7 +46,8 @@ def print_quotes():
     for instrument in instruments:
         ask = format(quotes[instrument].a / 10000, ".4f")
         bid = format(quotes[instrument].b / 10000, ".4f")
-        date = datetime.fromtimestamp(quotes[instrument].t / 1000.0).isoformat(timespec='milliseconds')
+        date = datetime.fromtimestamp(
+            quotes[instrument].t / 1000.0).isoformat(timespec='milliseconds')
         print(f"{instrument}(ask={ask},bid={bid},date={date})", end=" ")
     print(spinner[updates % len(spinner)], end="")
     sys.stdout.flush()
@@ -61,7 +66,8 @@ def on_subscribe(mqtt_client, userdata, level, buff):
     # you have _all_ the latest quotes and you can update them via incoming
     # live stream messages.
     print("Published.   Fetching latest quotes for initialization...")
-    latest = lemon_markets_client.market_data.quotes.get_latest(isin=instruments, epoch=True, decimals=False)
+    latest = lemon_markets_client.market_data.quotes.get_latest(
+        isin=instruments, epoch=True, decimals=False)
     for quote in latest.results:
         quotes[quote.isin] = quote
     print("Initialized. Waiting for live stream messages...")
@@ -88,7 +94,7 @@ if __name__ == "__main__":
     mqtt_client.on_message = on_message
     mqtt_client.on_subscribe = on_subscribe
 
-    ##Connect and receive data
+    # Connect and receive data
     print("Fetched.     Connecting MQTT client...")
     mqtt_client.connect("mqtt.ably.io")
     mqtt_client.loop_forever()
