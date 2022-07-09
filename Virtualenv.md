@@ -8,6 +8,7 @@ python -m pip install --upgrade pip
 pip install --upgrade wheel setuptools poetry autopep8
 pip install --upgrade jupyter jupyterlab
 pip install --upgrade -r requirements.txt
+# develop and test your code
 # ......
 deactivate.bat
 ```

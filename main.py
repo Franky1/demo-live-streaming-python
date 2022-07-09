@@ -1,22 +1,31 @@
 import configparser
 import json
+import os
 import sys
 from datetime import datetime
 
 import paho.mqtt.client as mqtt
+from dotenv import load_dotenv
 from lemon import api
 from lemon.market_data.model.quote import Quote
 
+# Load API key from .env file
+load_dotenv()  # take environment variables from .env.
+api_key = os.getenv("API_KEY")
 
-# Load configuration from config file config.ini
-# Allow keys without values, allow inline comments:
-config = configparser.ConfigParser(
+# Load configuration from config.ini file
+config = configparser.ConfigParser( # Allow keys without values, allow inline comments
     allow_no_value=True, inline_comment_prefixes=('#',))
 config.optionxform = str  # keep the case of the keys, don't convert to lowercase
 config.read('config.ini')  # read the config file
-api_key = config.get('API', 'key', fallback=None)  # get the api key
+if not api_key:
+    api_key = config.get('API', 'key', fallback=None)  # get the api key
 isins = config.items('ISINS')  # get all items from section 'ISINS'
 instruments = [isin[0] for isin in isins]  # get only the isins keys
+
+if not api_key:
+    print("No API key found. Please set API_KEY in .env or config.ini")
+    sys.exit(1)
 
 # Quotes
 quotes = {}
