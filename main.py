@@ -11,7 +11,7 @@ from lemon.market_data.model.quote import Quote
 
 # Load API key from .env file
 load_dotenv()  # take environment variables from .env.
-api_key = os.getenv("API_KEY")
+api_key = os.getenv("LEMON_API_KEY")
 
 # Load configuration from config.ini file
 config = configparser.ConfigParser( # Allow keys without values, allow inline comments
@@ -19,7 +19,7 @@ config = configparser.ConfigParser( # Allow keys without values, allow inline co
 config.optionxform = str  # keep the case of the keys, don't convert to lowercase
 config.read('config.ini')  # read the config file
 if not api_key:
-    api_key = config.get('API', 'key', fallback=None)  # get the api key
+    api_key = config.get('API', 'LEMON_API_KEY', fallback=None)  # get the api key
 isins = config.items('ISINS')  # get all items from section 'ISINS'
 instruments = [isin[0] for isin in isins]  # get only the isins keys
 
@@ -64,7 +64,7 @@ def print_quotes():
 
 # Live Streaming Callback Functions
 def on_connect(mqtt_client, userdata, flags, rc):
-    print(f"Connected.   Subscribing to {user_id}")
+    print(f"Connected.   Subscribing to {user_id}...")
     mqtt_client.subscribe(user_id)
 
 

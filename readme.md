@@ -4,9 +4,21 @@ This is a small example about using the [live streaming API](https://docs.lemon.
 
 This example will implement a basic stock ticker for the command line.
 
+## Get your API key
+
+<https://docs.lemon.markets/authentication>
+
+Login to your [lemon.markets](https://lemon.markets/) account and go to your [Dashboard](https://dashboard.lemon.markets/) page.
+Select `Market Data` and click `Create key`, if no API Key exists yet.
+Copy the API Key and make it accessible from this example application with one of the following options:
+
+1. Put the API Key in an environment variable called `LEMON_API_KEY` or
+2. Put the API Key in the `.env` file in the root directory of this project or
+3. Put the API Key in the `config.ini` file in the root directory of this project.
+
 ## Quick Start
 
-1. Replace `YOUR-API-KEY` with your actual API key in `main.py`.
+1. Set your API Key with one of the options described above.
 2. Install the dependencies using `pip3 install -r requirements.txt`
 3. Run the code: `python main.py`
 
