@@ -94,6 +94,7 @@ def on_message(client, userdata, msg):
 
 if __name__ == "__main__":
     # Request Live Streaming Credentials
+    print(api_key)
     lemon_markets_client, user_id, token = get_credentials(api_key)
 
     # Prepare Live Streaming Connection
@@ -105,6 +106,10 @@ if __name__ == "__main__":
 
     # Connect and receive data
     print("Fetched.     Connecting MQTT client...")
-    mqtt_client.connect("mqtt.ably.io")
+    try:
+        mqtt_client.connect("mqtt.ably.io")
+    except Exception as e:
+        print(f"Connect Error: {e}")
+        sys.exit(1)
     mqtt_client.loop_forever()
     print("Disconnected.")
