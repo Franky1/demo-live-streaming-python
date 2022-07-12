@@ -9,31 +9,35 @@ from dotenv import load_dotenv
 from lemon import api
 from lemon.market_data.model.quote import Quote
 
-# Load API key from .env file
-load_dotenv()  # take environment variables from .env.
-api_key = os.getenv("LEMON_API_KEY")
-
-# Load configuration from config.ini file
-config = configparser.ConfigParser( # Allow keys without values, allow inline comments
-    allow_no_value=True, inline_comment_prefixes=('#',))
-config.optionxform = str  # keep the case of the keys, don't convert to lowercase
-config.read('config.ini')  # read the config file
-if not api_key:
-    api_key = config.get('API', 'LEMON_API_KEY', fallback=None)  # get the api key
-isins = config.items('ISINS')  # get all items from section 'ISINS'
-instruments = [isin[0] for isin in isins]  # get only the isins keys
-
-if not api_key:
-    print("No API key found. Please set API_KEY in .env or config.ini")
-    sys.exit(1)
-
-# Quotes
+# Global variable with latest Quotes
 quotes = {}
-updates = 0
-spinner = "-\\|/"
+
+
+def load_config():
+    '''Load the configuration from env variable or .env file or config.ini file.'''
+    load_dotenv()  # load environment variables from .env.
+    api_key = os.getenv("LEMON_API_KEY")
+
+    # Load configuration from config.ini file
+    config = configparser.ConfigParser(
+        # Allow keys without values for the isins, allow inline comments
+        allow_no_value=True, inline_comment_prefixes=('#',';'))
+    config.optionxform = str  # keep the case of the keys, don't convert to lowercase
+    config.read('config.ini')  # read the config file
+    if not api_key:  # if no API key is provided in env, read it from the config file
+        api_key = config.get('API', 'LEMON_API_KEY', fallback=None)  # get the api key
+    isins = config.items('ISINS')  # get all items from section 'ISINS'
+    instruments = [isin[0] for isin in isins]  # get only the isins keys
+
+    if not api_key:
+        print("No API key found. Please set LEMON_API_KEY in env variable or .env or config.ini")
+        sys.exit(1)
+
+    return api_key, instruments
 
 
 def get_credentials(api_key: str):
+    '''Get the token for the MQTT broker connection from the Lemons REST API auth endpoint.'''
     print("Fetching credentials for live streaming...")
     # Lemon Markets API Client
     lemon_markets_client = api.create(
@@ -50,25 +54,24 @@ def get_credentials(api_key: str):
     return lemon_markets_client, user_id, token
 
 
-def print_quotes():
-    print("\r", end="")
-    for instrument in instruments:
-        ask = format(quotes[instrument].a / 10000, ".4f")
-        bid = format(quotes[instrument].b / 10000, ".4f")
-        date = datetime.fromtimestamp(
-            quotes[instrument].t / 1000.0).isoformat(timespec='milliseconds')
-        print(f"{instrument}(ask={ask},bid={bid},date={date})", end=" ")
-    print(spinner[updates % len(spinner)], end="")
-    sys.stdout.flush()
+def print_quote(quote):
+    '''Print a single quote.'''
+    ask = format(quote.a / 10000, ".4f")
+    bid = format(quote.b / 10000, ".4f")
+    date = datetime.fromtimestamp(quote.t / 1000.0).isoformat(timespec='milliseconds')
+    print(f"{quote.isin} (exc={quote.mic}, ask={ask}, bid={bid}, date={date})")
 
 
 # Live Streaming Callback Functions
 def on_connect(mqtt_client, userdata, flags, rc):
+    '''Callback when the client connects to the broker.'''
     print(f"Connected.   Subscribing to {user_id}...")
     mqtt_client.subscribe(user_id)
 
 
 def on_subscribe(mqtt_client, userdata, level, buff):
+    '''Callback when the client subscribes to a topic.'''
+    global quotes
     print(f"Subscribed.  Publishing requested instruments to {user_id}.subscriptions...")
     mqtt_client.publish(f"{user_id}.subscriptions", ",".join(instruments))
     # This is a great place to fetch `/v1/quotes/latest` on time via REST, so
@@ -79,22 +82,29 @@ def on_subscribe(mqtt_client, userdata, level, buff):
         isin=instruments, epoch=True, decimals=False)
     for quote in latest.results:
         quotes[quote.isin] = quote
+        print_quote(quote)
     print("Initialized. Waiting for live stream messages...")
-    print_quotes()
 
 
 def on_message(client, userdata, msg):
-    global updates
+    '''Callback when the client receives a message.'''
+    global quotes
     data = json.loads(msg.payload)
     quote = Quote._from_data(data, int, int)
     quotes[quote.isin] = quote
-    updates += 1
-    print_quotes()
+    print_quote(quote)
+
+
+def on_log(client, userdata, level, buf):
+    '''Callback when the client has log information.'''
+    print(f"Log: {buf}")
 
 
 if __name__ == "__main__":
+    # Load configuration
+    api_key, instruments = load_config()
+
     # Request Live Streaming Credentials
-    print(api_key)
     lemon_markets_client, user_id, token = get_credentials(api_key)
 
     # Prepare Live Streaming Connection
@@ -103,13 +113,22 @@ if __name__ == "__main__":
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
     mqtt_client.on_subscribe = on_subscribe
+    # mqtt_client.on_log = on_log  # enable logging
 
-    # Connect and receive data
+    # Connect to the MQTT broker
     print("Fetched.     Connecting MQTT client...")
     try:
         mqtt_client.connect("mqtt.ably.io")
     except Exception as e:
         print(f"Connect Error: {e}")
         sys.exit(1)
-    mqtt_client.loop_forever()
-    print("Disconnected.")
+
+    # Handle loop and disconnect on keyboard interrupt
+    try:
+        mqtt_client.loop_forever()
+    except KeyboardInterrupt:
+        mqtt_client.disconnect()
+        mqtt_client.loop_stop()
+    finally:
+        print("Disconnected. Exiting...")
+        sys.exit(0)

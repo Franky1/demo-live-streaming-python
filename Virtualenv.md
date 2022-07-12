@@ -18,6 +18,7 @@ pip install --upgrade jupyter jupyterlab
 # install dependencies:
 pip install --upgrade -r requirements.txt
 # develop and test your code
+python main.py
 # ......
 # deactivate the virtualenv:
 deactivate.bat
@@ -25,4 +26,4 @@ deactivate.bat
 
 ---
 
-> Last updated: 10.07.2022
+> Last updated: 12.07.2022

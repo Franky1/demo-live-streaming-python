@@ -20,7 +20,8 @@ Copy the API Key and make it accessible from this example application with one o
 
 1. Set your API Key with one of the options described above.
 2. Install the dependencies using `pip3 install -r requirements.txt`
-3. Run the code: `python main.py`
+3. Select the ISINs you want to track in the `config.ini` file.
+4. Run the code: `python main.py`
 
 You should see something like this:
 
@@ -31,7 +32,9 @@ Connected.   Subscribing to usr_qyJDQss5546j0bXjtWtLlRC3B4CNBdmg9V...
 Subscribed.  Publishing requested instruments to usr_qyJDQss5546j0bXjtWtLlRC3B4CNBdmg9V.subscriptions...
 Published.   Fetching latest quotes for initialization...
 Initialized. Waiting for live stream messages...
-US0378331005(ask=140.6000,bid=140.5200,date=2022-07-07T13:05:31.000) US88160R1014(ask=689.3000,bid=688.2000,date=2022-07-07T13:05:34.806) -
+US0378331005 (exc=XMUN, ask=145.5600, bid=145.3800, date=2022-07-12T21:59:59.740)
+US5949181045 (exc=XMUN, ask=253.0000, bid=252.8000, date=2022-07-12T21:59:59.413)
+US88160R1014 (exc=XMUN, ask=697.4000, bid=696.8000, date=2022-07-12T21:59:59.273)
 ```
 
 If you pay close attention, you will notice updates to the data in the
