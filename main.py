@@ -38,7 +38,7 @@ def load_config():
 
 def get_credentials(api_key: str):
     '''Get the token for the MQTT broker connection from the Lemons REST API auth endpoint.'''
-    print("Fetching credentials for live streaming...")
+    print("Fetching.    Credentials for live streaming...")
     # Lemon Markets API Client
     lemon_markets_client = api.create(
         market_data_api_token=api_key, trading_api_token="trading-api-is-not-used", env='paper')
@@ -46,12 +46,15 @@ def get_credentials(api_key: str):
         response = lemon_markets_client.market_data.post(
             "https://realtime.lemon.markets/v1/auth", json={})
         response = response.json()
+        # **NOTE:** Use `expires_at` to reconnect, because this connection will stop
+        # receiving data: https://docs.lemon.markets/live-streaming/overview#stream-authorization
+        expires_at = datetime.fromtimestamp(response['expires_at'] / 1000)
         user_id = response['user_id']
         token = response['token']
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
-    return lemon_markets_client, user_id, token
+    return lemon_markets_client, user_id, token, expires_at
 
 
 def print_quote(quote):
@@ -105,7 +108,8 @@ if __name__ == "__main__":
     api_key, instruments = load_config()
 
     # Request Live Streaming Credentials
-    lemon_markets_client, user_id, token = get_credentials(api_key)
+    lemon_markets_client, user_id, token, expires_at = get_credentials(api_key)
+    print(f"Fetched.     Token expires at {expires_at.isoformat()}")
 
     # Prepare Live Streaming Connection
     mqtt_client = mqtt.Client("Ably_Client")
@@ -116,7 +120,7 @@ if __name__ == "__main__":
     # mqtt_client.on_log = on_log  # enable logging
 
     # Connect to the MQTT broker
-    print("Fetched.     Connecting MQTT client...")
+    print("Prepared.    Connecting MQTT client...")
     try:
         mqtt_client.connect("mqtt.ably.io")
     except Exception as e:
