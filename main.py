@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import configparser
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
@@ -13,7 +15,7 @@ from lemon.market_data.model.quote import Quote
 quotes = {}
 
 
-def load_config():
+def load_config() -> tuple[str, list]:
     '''Load the configuration from env variable or .env file or config.ini file.'''
     load_dotenv()  # load environment variables from .env.
     api_key = os.getenv("LEMON_API_KEY")
@@ -36,7 +38,7 @@ def load_config():
     return api_key, instruments
 
 
-def get_credentials(api_key: str):
+def get_credentials(api_key: str)-> tuple[api.Api, str, str, datetime]:
     '''Get the token for the MQTT broker connection from the Lemons REST API auth endpoint.'''
     print("Fetching.    Credentials for live streaming...")
     # Lemon Markets API Client
@@ -57,7 +59,7 @@ def get_credentials(api_key: str):
     return lemon_markets_client, user_id, token, expires_at
 
 
-def print_quote(quote):
+def print_quote(quote) -> None:
     '''Print a single quote.'''
     ask = format(quote.a / 10000, ".4f")
     bid = format(quote.b / 10000, ".4f")
@@ -103,6 +105,15 @@ def on_log(client, userdata, level, buf):
     print(f"Log: {buf}")
 
 
+def check_token(api_key: str, expires_at: datetime):
+    '''Check if the token is still valid, one hour before expiration.'''
+    now = datetime.now() + timedelta(hours=1)
+    if now > expires_at:
+        print("Token expired. Fetching new token...")
+        lemon_markets_client, user_id, token, expires_at = get_credentials(api_key)
+    return lemon_markets_client, user_id, token, expires_at
+
+
 if __name__ == "__main__":
     # Load configuration
     api_key, instruments = load_config()
@@ -112,7 +123,7 @@ if __name__ == "__main__":
     print(f"Fetched.     Token expires at {expires_at.isoformat()}")
 
     # Prepare Live Streaming Connection
-    mqtt_client = mqtt.Client("Ably_Client")
+    mqtt_client = mqtt.Client(client_id="Ably_Client")
     mqtt_client.username_pw_set(username=token)
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
@@ -122,14 +133,14 @@ if __name__ == "__main__":
     # Connect to the MQTT broker
     print("Prepared.    Connecting MQTT client...")
     try:
-        mqtt_client.connect("mqtt.ably.io")
+        mqtt_client.connect(host="mqtt.ably.io")
     except Exception as e:
         print(f"Connect Error: {e}")
         sys.exit(1)
 
     # Handle loop and disconnect on keyboard interrupt
     try:
-        mqtt_client.loop_forever()
+        mqtt_client.loop_forever(timeout=5, retry_first_connection=True)
     except KeyboardInterrupt:
         mqtt_client.disconnect()
         mqtt_client.loop_stop()
