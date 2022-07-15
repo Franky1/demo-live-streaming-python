@@ -4,7 +4,9 @@ import configparser
 import json
 import os
 import sys
+import time
 from datetime import datetime, timedelta
+from enum import Enum, unique
 
 import msgpack
 import websocket
@@ -12,8 +14,33 @@ from dotenv import load_dotenv
 from lemon import api
 from lemon.market_data.model.quote import Quote
 
+
+@unique
+class WsActions(Enum):
+    HEARTBEAT = 0
+    ACK = 1
+    NACK = 2
+    CONNECT = 3
+    CONNECTED = 4
+    DISCONNECT = 5
+    DISCONNECTED = 6
+    CLOSE = 7
+    CLOSED = 8
+    ERROR = 9
+    ATTACH = 10
+    ATTACHED = 11
+    DETACH = 12
+    DETACHED = 13
+    PRESENCE = 14
+    MESSAGE = 15
+    SYNC = 16
+    AUTH = 17
+
+
 # Global variable with latest Quotes
-quotes = {}
+quotes: dict = {}
+instruments: list = []
+user_id: str = ""
 
 
 def load_config() -> tuple[str, list]:
@@ -77,14 +104,72 @@ def print_quote(quote) -> None:
     print(f"{quote.isin} (exc={quote.mic}, ask={ask}, bid={bid}, date={date})")
 
 
+def attach_channel(ws: websocket.WebSocketApp, user_id: str) -> None:
+    '''Attaching to my channel.'''
+    print("Attaching to channel...")
+    ws.send(json.dumps({
+        'action': WsActions.ATTACH.value,
+        'channel': user_id,
+    }))
+
+
+def detach_channel(ws: websocket.WebSocketApp, user_id: str) -> None:
+    '''Detaching from my channel.'''
+    print("Detaching from channel...")
+    ws.send(json.dumps({
+        'action': WsActions.DETACH.value,
+        'channel': user_id,
+    }))
+
+
+def close(ws: websocket.WebSocketApp, user_id: str) -> None:
+    '''Close the websocket connection gracefully.'''
+    print("Closing connection...")
+    ws.send(json.dumps({
+        'action': WsActions.CLOSE.value,
+        'channel': user_id,
+    }))
+
+
+# This DOES NOT work, because i get a "Permission denied" error
+def publish_message(ws: websocket.WebSocketApp, user_id: str, instruments: list) -> None:
+    '''Publish message.'''
+    print("Publish message...")
+    ws.send(json.dumps({
+        'action': WsActions.MESSAGE.value,
+        'channel': user_id,
+        "msgSerial": 0,
+        "messages": [
+            {
+                "name": "isins",
+                "data": ",".join(instruments)
+            }
+        ]
+    }))
+
+
 def on_message(ws, message):
-    msgpack_data = msgpack.loads(message)
-    action = msgpack_data.get('action', None)
-    if action == 0:
-        print("Heartbeat received")
-    elif action == 4:
-        print("Connection Details received")
-    print(f'Message: {msgpack_data}')
+    global user_id
+    global instruments
+    # decoded_data = msgpack.loads(message)
+    decoded_data = json.loads(message)
+    action = decoded_data.get('action', None)
+    print(f"{WsActions(action).name} received")
+    print(f'{WsActions(action).name} : {decoded_data}')
+    if action == WsActions.HEARTBEAT.value:
+        pass
+    elif action == WsActions.NACK.value:
+        pass
+    elif action == WsActions.CONNECTED.value:
+        attach_channel(ws, user_id)
+    elif action == WsActions.ATTACHED.value:
+        publish_message(ws, user_id, instruments)
+    elif action == WsActions.DETACHED.value:
+        pass
+    elif action == WsActions.SYNC.value:
+        pass
+    else:
+        pass
 
 
 def on_error(ws, error):
@@ -104,12 +189,13 @@ def on_pong(ws, pong_data):
 
 
 def on_data(ws, data, datatype, flag):
-    msgpack_data = msgpack.loads(data)
-    print(f'Data: {msgpack_data}')
+    # decoded_data = msgpack.loads(data)
+    decoded_data = json.loads(data)
+    print(f'Datatype: {datatype}')
+    print(f'Data: {decoded_data}')
 
 
-# so far the connection with websockets is working
-# however i have no clue how to activate or subscribe to the data
+# so far the connection with websockets is working, but the subscription is not working
 if __name__ == "__main__":
     # Load configuration
     api_key, instruments = load_config()
@@ -119,22 +205,30 @@ if __name__ == "__main__":
     print(f"Fetched.     Token expires at {expires_at.isoformat()}")
 
     # Prepare Live Streaming Connection
-    # websocket.enableTrace(True)
+    # websocket.enableTrace(True)  # enable for debugging
     websocket.setdefaulttimeout(5)
-    ws = websocket.WebSocketApp(url=f'wss://realtime.ably.io?client_id={user_id}&access_token={token}&format=msgpack&heartbeats=true',
+    ws = websocket.WebSocketApp(url=f'wss://realtime.ably.io?client_id={user_id}&access_token={token}&format=json&heartbeats=true',
                                 on_open=on_open,
                                 on_message=on_message,
+                                # on_data=on_data,
                                 on_error=on_error,
                                 on_close=on_close,
-                                on_pong=on_pong,
-                                on_data=on_data)
+                                # on_pong=on_pong,
+                                keep_running=False)
 
     # Handle loop and disconnect on keyboard interrupt
     try:
         ws.run_forever(ping_interval=5, ping_payload="PING")
         # ws.run_forever()
     except KeyboardInterrupt:
-        ws.close()
+        # Close the websocket connection gracefully
+        # However this does not work...
+        print("KeyboardInterrupt...")
+        detach_channel(ws, user_id)
+        time.sleep(1)
+        close(ws, user_id)
+        time.sleep(1)
     finally:
+        ws.close()
         print("Disconnected. Exiting...")
         sys.exit(0)
