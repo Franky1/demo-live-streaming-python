@@ -131,13 +131,12 @@ def close(ws: websocket.WebSocketApp, user_id: str) -> None:
     }))
 
 
-# This DOES NOT work, because i get a "Permission denied" error
 def publish_message(ws: websocket.WebSocketApp, user_id: str, instruments: list) -> None:
-    '''Publish message.'''
+    '''Publish message. Subscribe to all instruments.'''
     print("Publish message...")
     ws.send(json.dumps({
         'action': WsActions.MESSAGE.value,
-        'channel': user_id,
+        'channel': f'{user_id}.subscriptions',
         "msgSerial": 0,
         "messages": [
             {
