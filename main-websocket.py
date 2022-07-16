@@ -1,5 +1,4 @@
 from __future__ import annotations
-from cmath import log
 
 import configparser
 import json
@@ -39,18 +38,17 @@ class WsActions(Enum):
     AUTH = 17
 
 
-# config logging
+# config logging format
 logfmt = '%(asctime)s : %(levelname)7s : %(message)s'
-logging.basicConfig(level=logging.INFO, format=logfmt)
-
 
 # Global variable with latest Quotes
 quotes: dict = {}
 instruments: list = []
 user_id: str = ""
+protocol = 'json'
 
 
-def load_config() -> tuple[str, list]:
+def load_config() -> tuple[str, str, str, bool, list]:
     '''Load the configuration from env variable or .env file or config.ini file.'''
     load_dotenv()  # load environment variables from .env.
     api_key = os.getenv("LEMON_API_KEY")
@@ -64,6 +62,9 @@ def load_config() -> tuple[str, list]:
     config.read('config.ini')  # read the config file
     if not api_key:  # if no API key is provided in env, read it from the config file
         api_key = config.get('API', 'LEMON_API_KEY', fallback=None)  # get the api key
+    loglevel = config.get('LOGGING', 'loglevel', fallback='INFO')  # get the log level
+    protocol = config.get('PROTOCOL', 'format', fallback='json')  # get the protocol format
+    heartbeats = config.getboolean('PROTOCOL', 'heartbeats', fallback=False)  # get the heartbeats enabled
     isins = config.items('ISINS')  # get all items from section 'ISINS'
     instruments = [isin[0] for isin in isins]  # get only the isins keys
 
@@ -71,7 +72,7 @@ def load_config() -> tuple[str, list]:
         logging.error("No API key found. Please set LEMON_API_KEY in env variable or .env or config.ini")
         sys.exit(1)
 
-    return api_key, instruments
+    return api_key, loglevel, protocol, heartbeats, instruments
 
 
 def get_credentials(api_key: str)-> tuple[api.Api, str, str, datetime]:
@@ -116,7 +117,7 @@ def print_quote(quote) -> None:
 def attach_channel(ws: websocket.WebSocketApp, user_id: str) -> None:
     '''Attaching to my channel.'''
     logging.info("Attaching to channel...")
-    ws.send(json.dumps({
+    ws.send(encode_data({
         'action': WsActions.ATTACH.value,
         'channel': user_id,
     }))
@@ -125,7 +126,7 @@ def attach_channel(ws: websocket.WebSocketApp, user_id: str) -> None:
 def detach_channel(ws: websocket.WebSocketApp, user_id: str) -> None:
     '''Detaching from my channel.'''
     logging.info("Detaching from channel...")
-    ws.send(json.dumps({
+    ws.send(encode_data({
         'action': WsActions.DETACH.value,
         'channel': user_id,
     }))
@@ -134,7 +135,7 @@ def detach_channel(ws: websocket.WebSocketApp, user_id: str) -> None:
 def close(ws: websocket.WebSocketApp, user_id: str) -> None:
     '''Close the websocket connection gracefully.'''
     logging.info("Closing connection...")
-    ws.send(json.dumps({
+    ws.send(encode_data({
         'action': WsActions.CLOSE.value,
         'channel': user_id,
     }))
@@ -143,7 +144,7 @@ def close(ws: websocket.WebSocketApp, user_id: str) -> None:
 def publish_message(ws: websocket.WebSocketApp, user_id: str, instruments: list) -> None:
     '''Publish message. Subscribe to all instruments.'''
     logging.info("Publish message...")
-    ws.send(json.dumps({
+    ws.send(encode_data({
         'action': WsActions.MESSAGE.value,
         'channel': f'{user_id}.subscriptions',
         "msgSerial": 0,
@@ -159,12 +160,10 @@ def publish_message(ws: websocket.WebSocketApp, user_id: str, instruments: list)
 def on_message(ws, message):
     global user_id
     global instruments
-    # decoded_data = msgpack.loads(message)
-    decoded_data = json.loads(message)
+    decoded_data = decode_data(message)
     action = decoded_data.get('action', None)
     logging.debug(f"{WsActions(action).name} received")
     logging.debug(f'{WsActions(action).name} : {decoded_data}')
-
     if action == WsActions.CONNECTED.value:
         attach_channel(ws, user_id)
     elif action == WsActions.ATTACHED.value:
@@ -183,21 +182,43 @@ def on_open(ws):
     logging.info("Opened connection")
 
 
-def on_pong(ws, pong_data):
-    logging.debug(f'Pong: {pong_data}')
+def on_pong(ws, data):
+    # decoded_data = decode_data(data)
+    logging.debug(f'Pong: {data}')
 
 
 def on_data(ws, data, datatype, flag):
-    # decoded_data = msgpack.loads(data)
-    decoded_data = json.loads(data)
+    decoded_data = decode_data(data)
     logging.debug(f'Datatype: {datatype}')
     logging.debug(f'Data: {decoded_data}')
 
 
-# so far the connection with websockets is working, but the subscription is not working
+def decode_data(data):
+    '''Decode the data from the websocket.'''
+    global protocol
+    if protocol == 'json':
+        return json.loads(data)
+    elif protocol == 'msgpack':
+        return msgpack.loads(data)
+    return None
+
+
+def encode_data(data):
+    '''Encode the data to the websocket.'''
+    global protocol
+    if protocol == 'json':
+        return json.dumps(data)
+    elif protocol == 'msgpack':
+        return msgpack.dumps(data)
+    return None
+
+
 if __name__ == "__main__":
     # Load configuration
-    api_key, instruments = load_config()
+    api_key, loglevel, protocol, heartbeats, instruments = load_config()
+
+    # Set logging level and format
+    logging.basicConfig(format=logfmt, level=loglevel)
 
     # Request Live Streaming Credentials
     lemon_markets_client, user_id, token, expires_at = get_credentials(api_key)
@@ -206,7 +227,7 @@ if __name__ == "__main__":
     # Prepare Live Streaming Connection
     # websocket.enableTrace(True)  # enable for debugging
     websocket.setdefaulttimeout(5)
-    ws = websocket.WebSocketApp(url=f'wss://realtime.ably.io?client_id={user_id}&access_token={token}&format=json&heartbeats=true',
+    ws = websocket.WebSocketApp(url=f'wss://realtime.ably.io?client_id={user_id}&access_token={token}&format={protocol}&heartbeats={heartbeats}',
                                 on_open=on_open,
                                 on_message=on_message,
                                 on_error=on_error,
