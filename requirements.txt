@@ -1,4 +1,4 @@
-lemon==1.0.3
-paho-mqtt==1.6.1
 requests==2.28.1
+lemon==1.0.5
 python-dotenv==0.20.0
+paho-mqtt==1.6.1
