@@ -108,10 +108,11 @@ def check_token(api_key: str, expires_at: datetime):
 
 def print_quote(quote) -> None:
     '''Print a single quote.'''
-    ask = format(quote.a / 10000, ".4f")
-    bid = format(quote.b / 10000, ".4f")
-    date = datetime.fromtimestamp(quote.t / 1000.0).isoformat(timespec='milliseconds')
-    logging.info(f"{quote.isin} (exc={quote.mic}, ask={ask}, bid={bid}, date={date})")
+    quote = decode_data(quote)  # decode the data from the string
+    ask = format(quote.get('a') / 10000, ".4f")
+    bid = format(quote.get('b') / 10000, ".4f")
+    date = datetime.fromtimestamp(quote.get('t') / 1000.0).isoformat(timespec='milliseconds')
+    logging.info(f"{quote.get('isin')} (mic={quote.get('mic')}, ask={ask}, bid={bid}, date={date})")
 
 
 def attach_channel(ws: websocket.WebSocketApp, user_id: str) -> None:
@@ -168,6 +169,9 @@ def on_message(ws, message):
         attach_channel(ws, user_id)
     elif action == WsActions.ATTACHED.value:
         publish_message(ws, user_id, instruments)
+    elif action == WsActions.MESSAGE.value:
+        for quote in decoded_data.get('messages', []):
+            print_quote(quote.get('data', {}))
 
 
 def on_error(ws, error):
@@ -183,7 +187,6 @@ def on_open(ws):
 
 
 def on_pong(ws, data):
-    # decoded_data = decode_data(data)
     logging.debug(f'Pong: {data}')
 
 
@@ -225,7 +228,7 @@ if __name__ == "__main__":
     logging.info(f"Fetched Token. Token expires at {expires_at.isoformat()}")
 
     # Prepare Live Streaming Connection
-    # websocket.enableTrace(True)  # enable for debugging
+    # websocket.enableTrace(True)  # enable this for websocket debugging
     websocket.setdefaulttimeout(5)
     ws = websocket.WebSocketApp(url=f'wss://realtime.ably.io?client_id={user_id}&access_token={token}&format={protocol}&heartbeats={heartbeats}',
                                 on_open=on_open,
