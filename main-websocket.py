@@ -109,10 +109,11 @@ def check_token(api_key: str, expires_at: datetime):
 def print_quote(quote) -> None:
     '''Print a single quote.'''
     quote = decode_data(quote)  # decode the data from the string
-    ask = format(quote.get('a') / 10000, ".4f")
-    bid = format(quote.get('b') / 10000, ".4f")
-    date = datetime.fromtimestamp(quote.get('t') / 1000.0).isoformat(timespec='milliseconds')
-    logging.info(f"{quote.get('isin')} (mic={quote.get('mic')}, ask={ask}, bid={bid}, date={date})")
+    quote = Quote._from_data(quote, int, int)  # convert the data to a Quote object
+    ask = format(quote.a / 10000, ".4f")
+    bid = format(quote.b / 10000, ".4f")
+    date = datetime.fromtimestamp(quote.t / 1000.0).isoformat(timespec='milliseconds')
+    logging.info(f"{quote.isin} (mic={quote.mic}, ask={ask}, bid={bid}, date={date})")
 
 
 def attach_channel(ws: websocket.WebSocketApp, user_id: str) -> None:
