@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from asyncio.log import logger
 import configparser
 import json
 import logging
@@ -99,18 +100,13 @@ def on_subscribe(mqtt_client, userdata, level, buff):
     logging.info("Initialized. Waiting for live stream messages...")
 
 
-def on_message(client, userdata, msg):
+def decode_message(msg):
     '''Callback when the client receives a message.'''
     global quotes
     data = json.loads(msg.payload)
     quote = Quote._from_data(data, int, int)
     quotes[quote.isin] = quote
     print_quote(quote)
-
-
-def on_log(client, userdata, level, buf):
-    '''Callback when the client has log information.'''
-    logging.debug(f"Log: {buf}")
 
 
 def check_token(api_key: str, expires_at: datetime):
@@ -122,20 +118,18 @@ def check_token(api_key: str, expires_at: datetime):
     return lemon_markets_client, user_id, token, expires_at
 
 
-async def main(mqtt_client, user_id):
-    '''This does not work yet because of my lack of understanding of the asyncio stuff...'''
-    async with mqtt_client as client:
-        # client.on_connect = on_connect
-        # client.on_subscribe = on_subscribe
-        # client.on_message = on_message
-        # client.on_log = on_log
-        # await client.connect()
-        # await client.subscribe(user_id)
-        # await client.wait_for_disconnect()
+async def main(token: str, user_id: str, instruments: list, logger: logging.Logger) -> None:
+    '''Not yet tested if this works...'''
+    async with asyncio_mqtt.Client(hostname="mqtt.ably.io", username=token, client_id="Ably_Client", logger=logger, keepalive=10) as client:
         async with client.unfiltered_messages() as messages:
+            await asyncio.sleep(1)
             await client.subscribe(user_id)
+            await asyncio.sleep(1)
+            await client.publish(f"{user_id}.subscriptions", ",".join(instruments).encode())
+            await asyncio.sleep(1)
             async for message in messages:
                 print(message.payload.decode())
+                # decode_message(message.payload.decode())
 
 
 if __name__ == "__main__":
@@ -150,6 +144,5 @@ if __name__ == "__main__":
     logging.info(f"Fetched Token. Token expires at {expires_at.isoformat()}")
 
     # Prepare Live Streaming Connection
-    mqtt_client = asyncio_mqtt.Client(hostname="mqtt.ably.io", username=token, client_id="Ably_Client")
-
-    asyncio.run(main(mqtt_client, user_id))
+    logger = logging.getLogger()
+    asyncio.run(main(token=token, user_id=user_id, instruments=instruments, logger=logger))
