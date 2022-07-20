@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from asyncio.log import logger
 import configparser
 import json
 import logging
@@ -19,8 +18,11 @@ logfmt = '%(asctime)s : %(levelname)7s : %(message)s'
 
 # Global variable with latest Quotes
 quotes: dict = {}
+api_key: str = None
+
 
 asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 
 def load_config() -> tuple[str, str, list]:
     '''Load the configuration from env variable or .env file or config.ini file.'''
@@ -103,7 +105,7 @@ def on_subscribe(mqtt_client, userdata, level, buff):
 def decode_message(msg):
     '''Callback when the client receives a message.'''
     global quotes
-    data = json.loads(msg.payload)
+    data = json.loads(msg.payload.decode())
     quote = Quote._from_data(data, int, int)
     quotes[quote.isin] = quote
     print_quote(quote)
@@ -119,7 +121,7 @@ def check_token(api_key: str, expires_at: datetime):
 
 
 async def main(token: str, user_id: str, instruments: list, logger: logging.Logger) -> None:
-    '''Not yet tested if this works...'''
+    '''Main async function.'''
     async with asyncio_mqtt.Client(hostname="mqtt.ably.io", username=token, client_id="Ably_Client", logger=logger, keepalive=10) as client:
         async with client.unfiltered_messages() as messages:
             await asyncio.sleep(1)
@@ -128,8 +130,7 @@ async def main(token: str, user_id: str, instruments: list, logger: logging.Logg
             await client.publish(f"{user_id}.subscriptions", ",".join(instruments).encode())
             await asyncio.sleep(1)
             async for message in messages:
-                print(message.payload.decode())
-                # decode_message(message.payload.decode())
+                decode_message(message)
 
 
 if __name__ == "__main__":
@@ -145,4 +146,14 @@ if __name__ == "__main__":
 
     # Prepare Live Streaming Connection
     logger = logging.getLogger()
-    asyncio.run(main(token=token, user_id=user_id, instruments=instruments, logger=logger))
+    try:
+        asyncio.run(main(token=token, user_id=user_id, instruments=instruments, logger=logger))
+    except asyncio_mqtt.MqttError as e:
+        logging.error(e)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        logging.warning("KeyboardInterrupt...")
+        sys.exit(0)
+    except Exception as e:
+        logging.error(e)
+        sys.exit(1) # unknown error
