@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import configparser
 import json
 import logging
@@ -10,7 +11,7 @@ from datetime import datetime, timedelta
 from enum import Enum, unique
 
 import msgpack
-import websocket
+import websockets
 from dotenv import load_dotenv
 from lemon import api
 from lemon.market_data.model.quote import Quote
