@@ -12,13 +12,15 @@ venv\Scripts\activate.bat
 # update pip within the virtualenv:
 python -m pip install --upgrade pip
 # install or update tools within the virtualenv:
-pip install --upgrade wheel setuptools poetry autopep8 mypy
+pip install --upgrade wheel setuptools poetry autopep8 mypy types-pytz
 # next line only if you want to use jupyter notebooks:
 pip install --upgrade jupyter jupyterlab
 # install dependencies:
 pip install --upgrade -r requirements.txt
 # develop and test your code
 python main.py
+# check mypy types:
+mypy main.py
 # ......
 # deactivate the virtualenv:
 deactivate.bat
@@ -26,4 +28,4 @@ deactivate.bat
 
 ---
 
-> Last updated: 12.07.2022
+> Last updated: 22.07.2022
