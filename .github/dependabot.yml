@@ -1,7 +1,23 @@
 version: 2
 updates:
+
+  # Check dependencies for Python
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "daily"
       time: "02:21"
+
+  # Check dependencies for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "02:27"
+
+  # Check dependencies for docker
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "02:31"
